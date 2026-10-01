@@ -3,7 +3,7 @@ name=GeoHex Generator
 qgisMinimumVersion=3.40
 ; qgisMaximumVersion は QGIS 4.x での動作確認後に 4.99 を追加する（未設定なら 3.x 系のみ対応と見なされる）
 description=Generate GeoHex v3 hexagon cells over a polygon layer (e.g. the land area of Japan).
-about=ポリゴンレイヤ（日本の陸域など）と重なる GeoHex v3 の六角形セルを生成する Processing アルゴリズムを提供します。GeoHex v3.2 の公式コア(MIT, (c) 2009 @sa2da)を純Pythonへ移植して使用しています。
+about=ポリゴンレイヤ（日本の陸域など）と重なる GeoHex v3 の六角形セルを生成する Processing アルゴリズムを提供します。GeoHex v3.2 の公式コア(MIT, (c) 2009 @sa2da, http://www.geohex.org)を純Pythonへ移植して使用しています。
 version=0.1.0
 author=yo-1
 tracker=https://github.com/yo-1/geohex-qgis/issues
