@@ -1,6 +1,7 @@
 """GeoHex グリッド生成アルゴリズム（QGIS Processing）。
 
-ポリゴンレイヤ（日本の陸域など）と重なる GeoHex v3 のセルを、ポリゴンとして出力する。
+ポリゴンレイヤ（日本の陸域など）またはラインレイヤ（路網など）と重なる GeoHex v3 のセルを、
+ポリゴンとして出力する。
 実際のセル列挙ロジックは cell_selector.py（QGIS非依存）にあり、
 このファイルは QGIS の入出力・座標変換・ジオメトリ判定との橋渡しだけを担当する。
 
@@ -57,6 +58,10 @@ _SOURCE_POLYGON = _resolve(
     lambda: Qgis.ProcessingSourceType.VectorPolygon,
     lambda: QgsProcessing.TypeVectorPolygon,
 )
+_SOURCE_LINE = _resolve(
+    lambda: Qgis.ProcessingSourceType.VectorLine,
+    lambda: QgsProcessing.TypeVectorLine,
+)
 _NUMBER_INTEGER = _resolve(
     lambda: Qgis.ProcessingNumberParameterType.Integer,
     lambda: QgsProcessingParameterNumber.Integer,
@@ -67,6 +72,7 @@ _SKIP_VALIDITY_CHECK = _resolve(
 )
 _WKB_POLYGON = Qgis.WkbType.Polygon
 _GEOMETRY_POLYGON = Qgis.GeometryType.Polygon
+_GEOMETRY_LINE = Qgis.GeometryType.Line
 
 
 class PreparedLandOracle:
@@ -142,7 +148,11 @@ class GenerateGeoHexGridAlgorithm(QgsProcessingAlgorithm):
 
     def shortHelpString(self):
         return self.tr(
-            "入力ポリゴン（例: 日本の陸域）と重なる GeoHex v3 のセルを、ポリゴンとして出力します。\n\n"
+            "入力ポリゴン（例: 陸域）または入力ライン（例: 路網）と重なる GeoHex v3 のセルを、"
+            "ポリゴンとして出力します。\n\n"
+            "・このツールは陸域かどうかを判定しません。入力データが範囲そのものです。"
+            "海を含むポリゴンを入れると海のセルも出力されます。\n"
+            "・ライン入力では、線が通るセルを出力します（抽出条件は常に『重なるセル』）。\n"
             "・出力CRSは EPSG:4326。頂点は公式実装(getHexCoords)と同じ6点です。\n"
             "・属性 area_m2 は、6頂点のポリゴンを WGS84 楕円体上で測った面積（m²）です。"
             "フィールド計算機の $area（楕円体 WGS84 設定時）と同じ方法です。\n"
@@ -153,7 +163,8 @@ class GenerateGeoHexGridAlgorithm(QgsProcessingAlgorithm):
             "取りこぼしたくない場合は『重なるセル』を使ってください。\n"
             "・セルは丸ごと出力します（陸域でクリップしません）。クリップや面積集計が必要な場合は、"
             "出力に対して標準の『交差』ツールを使ってください。\n"
-            "・無効なジオメトリは自動修復を試みます。入力は WGS84/JGD2011 など任意のCRSで構いません。"
+            "・無効なジオメトリは自動修復を試みます。入力は WGS84/JGD2011 など任意のCRSで構いません。\n\n"
+            "GeoHex: © 2009 @sa2da (MIT License) http://www.geohex.org"
         )
 
     # ---- パラメータ -----------------------------------------------------
@@ -162,8 +173,8 @@ class GenerateGeoHexGridAlgorithm(QgsProcessingAlgorithm):
         self.addParameter(
             QgsProcessingParameterFeatureSource(
                 self.INPUT,
-                self.tr("対象範囲ポリゴンレイヤ（陸域など）"),
-                [_SOURCE_POLYGON],
+                self.tr("対象範囲レイヤ（ポリゴン: 陸域など／ライン: 路網など）"),
+                [_SOURCE_POLYGON, _SOURCE_LINE],
             )
         )
         self.addParameter(
@@ -259,9 +270,13 @@ class GenerateGeoHexGridAlgorithm(QgsProcessingAlgorithm):
         seen = set()
         batch = []
         written = 0
-        part_count = 0
+        feature_count = 0
+        polygon_part_count = 0
+        line_part_count = 0
+        ignored_part_count = 0  # ポイントなど、対象外のパート
         repaired_count = 0
         skipped_count = 0
+        line_with_center_mode = False
 
         def flush():
             nonlocal written
@@ -284,6 +299,7 @@ class GenerateGeoHexGridAlgorithm(QgsProcessingAlgorithm):
             if total > 0:
                 feedback.setProgress(100.0 * index / total)
 
+            feature_count += 1
             geometry = feature.geometry()
             if geometry.isNull() or geometry.isEmpty():
                 skipped_count += 1
@@ -297,14 +313,26 @@ class GenerateGeoHexGridAlgorithm(QgsProcessingAlgorithm):
                 skipped_count += 1
                 continue
 
-            if not geometry.isGeosValid():
+            # 無効ジオメトリの修復はポリゴンのみ（ラインは検証コストに見合わないため省略）
+            if geometry.type() == _GEOMETRY_POLYGON and not geometry.isGeosValid():
                 geometry = geometry.makeValid()
                 repaired_count += 1
 
             for part in geometry.asGeometryCollection():
-                if part.isNull() or part.isEmpty() or part.type() != _GEOMETRY_POLYGON:
+                if part.isNull() or part.isEmpty():
                     continue
-                part_count += 1
+                part_type = part.type()
+                if part_type == _GEOMETRY_POLYGON:
+                    part_mode = mode
+                    polygon_part_count += 1
+                elif part_type == _GEOMETRY_LINE:
+                    # 線は面積を持たず中心が線上に載ることは実質ないため、常に「重なるセル」で判定する。
+                    part_mode = MODE_INTERSECTS
+                    line_with_center_mode = line_with_center_mode or mode == MODE_CENTER
+                    line_part_count += 1
+                else:
+                    ignored_part_count += 1
+                    continue
 
                 bbox = part.boundingBox()
                 oracle = PreparedLandOracle(part)  # part をこのスコープで保持（寿命保証）
@@ -312,7 +340,7 @@ class GenerateGeoHexGridAlgorithm(QgsProcessingAlgorithm):
                     (bbox.xMinimum(), bbox.yMinimum(), bbox.xMaximum(), bbox.yMaximum()),
                     level,
                     oracle,
-                    mode,
+                    part_mode,
                     seen=seen,
                     is_canceled=feedback.isCanceled,
                 ):
@@ -347,6 +375,28 @@ class GenerateGeoHexGridAlgorithm(QgsProcessingAlgorithm):
 
         flush()
 
+        feedback.pushInfo(
+            self.tr(
+                "入力: フィーチャ {features} 件 → 対象パート ポリゴン {polygons} / ライン {lines}"
+                "（対象外パート {ignored}）"
+            ).format(
+                features=feature_count,
+                polygons=polygon_part_count,
+                lines=line_part_count,
+                ignored=ignored_part_count,
+            )
+        )
+        if line_with_center_mode:
+            feedback.pushWarning(
+                self.tr("ライン入力には『中心が陸域内』は適用できないため、『重なるセル』で処理しました。")
+            )
+        if written == 0 and not feedback.isCanceled():
+            feedback.pushWarning(
+                self.tr(
+                    "出力が0件です。入力が空（『選択地物のみ』で選択が0件の場合を含む）、"
+                    "対象外のジオメトリ、座標変換の失敗などを確認してください。"
+                )
+            )
         if repaired_count:
             feedback.pushWarning(
                 self.tr("{n} 件のフィーチャで無効なジオメトリを自動修復しました。").format(n=repaired_count)
@@ -359,8 +409,8 @@ class GenerateGeoHexGridAlgorithm(QgsProcessingAlgorithm):
             feedback.pushWarning(self.tr("キャンセルされたため、出力は途中までです。"))
 
         feedback.pushInfo(
-            self.tr("完了: ポリゴンパート {parts} 件 → {cells} セル出力（{sec:.1f} 秒）").format(
-                parts=part_count, cells=written, sec=time.monotonic() - started
+            self.tr("完了: {cells} セル出力（{sec:.1f} 秒）").format(
+                cells=written, sec=time.monotonic() - started
             )
         )
         return {self.OUTPUT: dest_id}

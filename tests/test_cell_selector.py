@@ -56,13 +56,9 @@ class RectUnionOracle:
         return any(r[0] <= lon <= r[2] and r[1] <= lat <= r[3] for r in self.rects)
 
 
-def brute_force(rects, level, mode):
-    """全格子点を総当たりで判定した期待値。"""
-    oracle = RectUnionOracle(rects)
-    lon_min = min(r[0] for r in rects)
-    lat_min = min(r[1] for r in rects)
-    lon_max = max(r[2] for r in rects)
-    lat_max = max(r[3] for r in rects)
+def brute_force_oracle(oracle, bbox, level, mode):
+    """全格子点を総当たりで判定した期待値（ブロック分割・全セル採用の最適化を使わない）。"""
+    lon_min, lat_min, lon_max, lat_max = bbox
     h = gh.hex_size(level)
     step_u, step_v = 3 * h, math.sqrt(3) * h
     x0, y0 = gh.loc2xy(lon_min, lat_min)
@@ -82,6 +78,58 @@ def brute_force(rects, level, mode):
             if hit:
                 expected.add((x, y))
     return expected
+
+
+def brute_force(rects, level, mode):
+    bbox = (
+        min(r[0] for r in rects),
+        min(r[1] for r in rects),
+        max(r[2] for r in rects),
+        max(r[3] for r in rects),
+    )
+    return brute_force_oracle(RectUnionOracle(rects), bbox, level, mode)
+
+
+def _axes(points):
+    """凸多角形（または線分）の分離軸候補。線分は法線と方向の両方を返す。"""
+    n = len(points)
+    axes = []
+    for i in range(n if n > 2 else 1):
+        (x1, y1), (x2, y2) = points[i], points[(i + 1) % n]
+        axes.append((-(y2 - y1), x2 - x1))
+        if n == 2:
+            axes.append((x2 - x1, y2 - y1))
+    return axes
+
+
+def convex_shapes_hit(a, b):
+    """凸多角形／線分どうしの交差判定（分離軸判定）。"""
+    for ax, ay in _axes(a) + _axes(b):
+        pa = [x * ax + y * ay for x, y in a]
+        pb = [x * ax + y * ay for x, y in b]
+        if max(pa) < min(pb) or max(pb) < min(pa):
+            return False
+    return True
+
+
+class SegmentOracle:
+    """路網のような「線」を模したオラクル。線は面積を持たないので rect_contained は常に False。"""
+
+    def __init__(self, start, end):
+        self.segment = [start, end]
+
+    def rect_intersects(self, lon_min, lat_min, lon_max, lat_max):
+        corners = [(lon_min, lat_min), (lon_max, lat_min), (lon_max, lat_max), (lon_min, lat_max)]
+        return convex_shapes_hit(self.segment, corners)
+
+    def rect_contained(self, lon_min, lat_min, lon_max, lat_max):
+        return False
+
+    def polygon_intersects(self, ring):
+        return convex_shapes_hit(self.segment, ring[:-1])
+
+    def point_covered(self, lon, lat):
+        return False
 
 
 L_SHAPE = [(139.0, 35.0, 139.8, 35.4), (139.4, 35.0, 139.8, 36.0)]
@@ -116,6 +164,22 @@ class SelectCellsTest(unittest.TestCase):
                             )
                             self.assertEqual(len(actual), len(set(actual)), "重複出力")
                             self.assertEqual(set(actual), expected)
+
+    def test_line_input_matches_brute_force(self):
+        """線（路網）入力: 斜めの線分が通るセルだけが、ブロック分割でも過不足なく選ばれる。"""
+        start, end = (139.00, 35.20), (139.60, 35.50)
+        bbox = (start[0], start[1], end[0], end[1])
+        for level in (6, 7):
+            expected = brute_force_oracle(SegmentOracle(start, end), bbox, level, MODE_INTERSECTS)
+            self.assertGreater(len(expected), 0)
+            for tile_size in (1, 5, 32):
+                with self.subTest(level=level, tile=tile_size):
+                    actual = set(
+                        select_cells(
+                            bbox, level, SegmentOracle(start, end), MODE_INTERSECTS, tile_size=tile_size
+                        )
+                    )
+                    self.assertEqual(actual, expected)
 
     def test_tiny_islet_is_covered_only_in_intersects_mode(self):
         oracle = RectUnionOracle(TINY_ISLET)
