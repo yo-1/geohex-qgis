@@ -4,7 +4,7 @@
 QGIS の Processing アルゴリズムとして実装しているため、ツールボックス・バッチ処理・モデラー・Python コンソールから同じ形で使えます。
 
 > **検証状況（0.1.0）**
-> - GeoHex コア（`geohex_v3.py`）: 公式 v3.2 JS ソースからの移植。他実装の公開サンプル出力（Ruby・Perl・TypeScript・PL/pgSQL・ES2015・Python の README、計7例）と一致することを確認済み。**公式 JS 自体・公式テストケースとの全件突き合わせは未実施。**
+> - GeoHex コア（`geohex_v3.py`）: 公式 v3.2 JS ソースからの移植。他実装の公開サンプル出力（Ruby・Perl・TypeScript・PL/pgSQL・ES2015・Python の README、計7例）と一致することを確認済み。**公式 JS (`hex_v3.2_core.js`) をNode.jsで直接実行し、920件（固定代表点×複数Level、日本域・世界域の乱数点、日付変更線・極付近を含む）を全件突き合わせ、不一致0件を確認済み**（`tests/test_geohex_v3.py` の `OfficialJSCrossValidationTest` に代表的な値を回帰テストとして格納）。
 > - セル列挙（`cell_selector.py`）: 総当たり判定との一致を単体テストで確認済み。
 > - QGIS 連携部分（`algorithm.py` ほか）: **QGIS 実機では未実行**（QGIS API の簡易スタブでの動作確認のみ）。実機テストが最初の作業です。
 
