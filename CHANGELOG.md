@@ -14,3 +14,4 @@
 - 実機検証チェックリストにライン入力（路網）の追加項目（`docs/CHECKLIST_ADDENDUM_LINE_INPUT.md`）を追加
 - GeoHex 公式JS (`hex_v3.2_core.js`) をNode.jsで直接実行し、Pythonポートの出力を920件突き合わせ、不一致0件を確認。代表的な値を `OfficialJSCrossValidationTest` として単体テストに追加（27件→29件）
 - 実機（QGIS 3.44.13）でライン入力の実機検証チェックリストのうちL01・L02・L04・L06を実施、結果を `docs/CHECKLIST_ADDENDUM_LINE_INPUT.md` に記録（L03・L05・L07〜L10は引き続き未実施）
+- プラグインの制作者表記を、他の自作プラグインに合わせて `metadata.txt` の `author` とLICENSEの著作権者名を `yo-1` から `Yoichi Wada` に変更（GitHubアカウント名(`yo-1`)自体は `repository`/`tracker`/`homepage` のURLとしてそのまま使用）
