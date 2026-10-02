@@ -11,3 +11,5 @@
 - README・LICENSE・about に GeoHex の帰属表示（MIT, © 2009 @sa2da）を明記
 - README にレベル番号が版・実装で異なる旨の注意を追記
 - `tools/compare_grids.py`（GeoHex と H3 のセルの面積・辺長・中心からの距離を主要地点で比較する開発用ツール）を追加。`docs/GEOHEX_GUIDE.md` に平面直角座標系と主要地点のセルの大きさの章を追加
+- 実機検証チェックリストにライン入力（路網）の追加項目（`docs/CHECKLIST_ADDENDUM_LINE_INPUT.md`）を追加
+- GeoHex 公式JS (`hex_v3.2_core.js`) をNode.jsで直接実行し、Pythonポートの出力を920件突き合わせ、不一致0件を確認。代表的な値を `OfficialJSCrossValidationTest` として単体テストに追加（27件→29件）
