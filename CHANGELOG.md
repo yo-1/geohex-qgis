@@ -15,4 +15,5 @@
 - GeoHex 公式JS (`hex_v3.2_core.js`) をNode.jsで直接実行し、Pythonポートの出力を920件突き合わせ、不一致0件を確認。代表的な値を `OfficialJSCrossValidationTest` として単体テストに追加（27件→29件）
 - 実機（QGIS 3.44.13）でライン入力の実機検証チェックリストのうちL01・L02・L03・L04・L06を実施、結果を `docs/CHECKLIST_ADDENDUM_LINE_INPUT.md` に記録（L05・L07〜L10は引き続き未実施）
 - 実機（QGIS 3.44.13）でライン入力L05（出力属性 `area_m2` の妥当性）を実施。EPSG:2451への再投影によるクロスチェックで `area_m2` との差が約0.018%に収まることを確認しPASS。なお「ジオメトリ属性を追加」ツールの『楕円体を用いた計算』との約23%の乖離は原因未特定のまま留意事項として記録（`docs/CHECKLIST_ADDENDUM_LINE_INPUT.md` 参照、L07〜L10は引き続き未実施）
+- 実機（QGIS 3.44.13）でライン入力L07（出力0件時の警告表示）を実施。地物数0件の一時スクラッチレイヤを入力として実行し、期待通りの0件警告メッセージを確認しPASS（L08〜L10は引き続き未実施）
 - プラグインの制作者表記を、他の自作プラグインに合わせて `metadata.txt` の `author` とLICENSEの著作権者名を `yo-1` から `Yoichi Wada` に変更（GitHubアカウント名(`yo-1`)自体は `repository`/`tracker`/`homepage` のURLとしてそのまま使用）
